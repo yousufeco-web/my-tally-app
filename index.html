@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tally Pro Elite</title>
+    <style>
+        :root { --primary: #2d89ef; --success: #4caf50; --danger: #f44336; --goal: #f39c12; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: var(--bg); margin: 0; padding: 20px; color: #333; }
+        .card { background: white; padding: 1.5rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; text-align: center; position: relative; }
+        
+        .goal-container { margin-bottom: 15px; font-size: 0.9rem; color: #888; }
+        #goal-input { width: 45px; padding: 5px; border-radius: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold; }
+
+        .score-display { font-size: 4.5rem; font-weight: 800; color: var(--primary); margin: 0; line-height: 1; transition: 0.3s; }
+        .score-reached { color: var(--goal); }
+        
+        #tally-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 80px; padding: 15px; border-radius: 12px; margin: 15px 0; background: #fafafa; border: 1px inset #eee; }
+        .tally-group { font-size: 2.2rem; letter-spacing: 2px; color: #444; font-weight: bold; }
+        .tally-goal-reached { color: var(--goal) !important; }
+        
+        .controls { display: flex; gap: 12px; }
+        button { padding: 16px; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer; transition: 0.2s; font-weight: bold; }
+        .btn-add { background-color: var(--success); color: white; flex: 2; box-shadow: 0 4px 0 #3d8b40; }
+        .btn-sub { background-color: var(--danger); color: white; flex: 1; box-shadow: 0 4px 0 #d32f2f; }
+        .btn-reset { background-color: #444; color: white; margin-top: 20px; width: 100%; }
+
+        /* History Styles */
+        .history-section { margin-top: 30px; width: 100%; max-width: 400px; }
+        .history-item { background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 6px solid var(--primary); animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .btn-delete { position: absolute; top: 8px; right: 10px; background: none; border: none; color: #ccc; font-size: 1.2rem; cursor: pointer; padding: 0 5px; }
+        .btn-delete:hover { color: var(--danger); }
+        
+        .history-date { font-size: 0.75rem; color: #999; margin-top: 4px; }
+        .history-note { font-style: italic; color: #666; font-size: 0.9rem; margin-top: 8px; border-top: 1px solid #f0f0f0; padding-top: 5px; }
+        .history-score { font-weight: 800; font-size: 1.3rem; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div class="goal-container">
+            Target: <input type="number" id="goal-input" value="10" onchange="updateGoal(this.value)">
+        </div>
+        
+        <div class="score-display" id="score">0</div>
+        <div id="tally-container"></div>
+        
+        <div class="controls">
+            <button class="btn-sub" onclick="updatePoints(-1)">−</button>
+            <button class="btn-add" onclick="updatePoints(1)">+ Add</button>
+        </div>
+        
+        <button class="btn-reset" onclick="archiveAndReset()">Finish & Save</button>
+    </div>
+
+    <div class="history-section">
+        <h3 style="margin-left: 5px;">Activity Log</h3>
+        <div id="history-list"></div>
+    </div>
+
+    <script>
+        let points = parseInt(localStorage.getItem('dailyTally')) || 0;
+        let goal = parseInt(localStorage.getItem('tallyGoal')) || 10;
+        let history = JSON.parse(localStorage.getItem('tallyHistory')) || [];
+
+        document.getElementById('goal-input').value = goal;
+
+        function updateGoal(val) {
+            goal = parseInt(val) || 10;
+            localStorage.setItem('tallyGoal', goal);
+            render();
+        }
+
+        function render() {
+            const isGoalReached = points >= goal;
+            document.getElementById('score').innerText = points;
+            document.getElementById('score').className = isGoalReached ? 'score-display score-reached' : 'score-display';
+            localStorage.setItem('dailyTally', points);
+
+            const container = document.getElementById('tally-container');
+            container.innerHTML = '';
+            let fullGroups = Math.floor(points / 5);
+            let remainder = points % 5;
+
+            for (let i = 0; i < fullGroups; i++) {
+                const span = document.createElement('span');
+                span.className = isGoalReached ? 'tally-group tally-goal-reached' : 'tally-group';
+                span.innerText = '卌';
+                container.appendChild(span);
+            }
+            if (remainder > 0) {
+                const span = document.createElement('span');
+                span.className = isGoalReached ? 'tally-group tally-goal-reached' : 'tally-group';
+                span.innerText = '|'.repeat(remainder);
+                container.appendChild(span);
+            }
+
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            
+            history.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                const hitGoal = item.val >= (item.goal || 0);
+                div.style.borderLeftColor = hitGoal ? 'var(--goal)' : 'var(--primary)';
+                
+                div.innerHTML = `
+                    <button class="btn-delete" onclick="deleteHistory(${index})">×</button>
+                    <div style="flex: 1;">
+                        <div style="font-weight:bold;">${hitGoal ? '🌟 Goal Met' : 'Session'}</div>
+                        <div class="history-date">${item.date}</div>
+                        ${item.note ? `<div class="history-note">"${item.note}"</div>` : ''}
+                    </div>
+                    <div class="history-score" style="color:${hitGoal ? 'var(--goal)' : 'var(--primary)'}">${item.val}</div>
+                `;
+                list.prepend(div); // Newest on top
+            });
+        }
+
+        function updatePoints(val) {
+            points = Math.max(0, points + val);
+            render();
+        }
+
+        function archiveAndReset() {
+            if (points === 0) return;
+            const note = prompt("Note for this entry:", "");
+            if (note !== null) {
+                const now = new Date();
+                const timestamp = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                history.push({ date: timestamp, val: points, goal: goal, note: note });
+                localStorage.setItem('tallyHistory', JSON.stringify(history));
+                points = 0;
+                render();
+            }
+        }
+
+        function deleteHistory(index) {
+            if(confirm("Delete this entry forever?")) {
+                history.splice(index, 1);
+                localStorage.setItem('tallyHistory', JSON.stringify(history));
+                render();
+            }
+        }
+
+        render();
+    </script>
+</body>
+</html>
