@@ -3,55 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tally Pro Cloud</title>
+    <title>Tally Live Sync</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
-    
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
     <style>
-        :root { --primary: #2d89ef; --success: #4caf50; --danger: #f44336; --goal: #f39c12; --bg: #f8f9fa; }
-        body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: var(--bg); margin: 0; padding: 20px; color: #333; }
-        .card { background: white; padding: 1.5rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; text-align: center; position: relative; }
-        .goal-container { margin-bottom: 15px; font-size: 0.9rem; color: #888; }
-        #goal-input { width: 45px; padding: 5px; border-radius: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold; }
-        .score-display { font-size: 4.5rem; font-weight: 800; color: var(--primary); margin: 0; line-height: 1; transition: 0.3s; }
-        .score-reached { color: var(--goal); }
-        #tally-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 80px; padding: 15px; border-radius: 12px; margin: 15px 0; background: #fafafa; border: 1px inset #eee; }
+        :root { --primary: #2d89ef; --success: #4caf50; --danger: #f44336; --bg: #f8f9fa; }
+        body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: var(--bg); margin: 0; padding: 20px; }
+        .card { background: white; padding: 1.5rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; text-align: center; }
+        .score-display { font-size: 4.5rem; font-weight: 800; color: var(--primary); margin: 10px 0; }
+        #tally-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 80px; padding: 15px; border-radius: 12px; margin-bottom: 20px; background: #fafafa; border: 1px inset #eee; }
         .tally-group { font-size: 2.2rem; letter-spacing: 2px; color: #444; font-weight: bold; }
-        .tally-goal-reached { color: var(--goal) !important; }
-        .controls { display: flex; gap: 12px; }
-        button { padding: 16px; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer; transition: 0.2s; font-weight: bold; }
-        .btn-add { background-color: var(--success); color: white; flex: 2; box-shadow: 0 4px 0 #3d8b40; }
-        .btn-sub { background-color: var(--danger); color: white; flex: 1; box-shadow: 0 4px 0 #d32f2f; }
-        .btn-reset { background-color: #444; color: white; margin-top: 20px; width: 100%; }
+        .controls { display: flex; gap: 12px; width: 100%; }
+        button { padding: 20px; border: none; border-radius: 12px; font-size: 1.2rem; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-add { background-color: var(--success); color: white; flex: 2; }
+        .btn-sub { background-color: var(--danger); color: white; flex: 1; }
+        
         .history-section { margin-top: 30px; width: 100%; max-width: 400px; }
-        .history-item { background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-left: 6px solid var(--primary); }
-        .btn-delete { position: absolute; top: 8px; right: 10px; background: none; border: none; color: #ccc; font-size: 1.2rem; cursor: pointer; padding: 0 5px; }
-        .history-date { font-size: 0.75rem; color: #999; margin-top: 4px; }
-        .history-note { font-style: italic; color: #666; font-size: 0.9rem; margin-top: 8px; border-top: 1px solid #f0f0f0; padding-top: 5px; }
-        .history-score { font-weight: 800; font-size: 1.3rem; margin-top: 10px; }
+        .log-item { background: #fff; padding: 12px; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.03); border-left: 4px solid #ccc; }
+        .log-time { font-size: 0.8rem; color: #888; }
+        .log-action { font-weight: bold; font-size: 0.9rem; }
+        .text-add { color: var(--success); }
+        .text-sub { color: var(--danger); }
+        
+        .btn-clear { background: none; border: 1px solid #ccc; color: #888; font-size: 0.8rem; padding: 8px 15px; border-radius: 8px; margin-top: 10px; cursor: pointer; width: 100%; }
+        .btn-clear:hover { background: #eee; color: var(--danger); }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <div class="goal-container">
-            Target: <input type="number" id="goal-input" value="10" onchange="updateGoal(this.value)">
-        </div>
         <div class="score-display" id="score">0</div>
         <div id="tally-container"></div>
         <div class="controls">
-            <button class="btn-sub" onclick="changePoints(-1)">−</button>
-            <button class="btn-add" onclick="changePoints(1)">+ Add</button>
+            <button class="btn-sub" onclick="logActivity(-1)">−</button>
+            <button class="btn-add" onclick="logActivity(1)">+ Add Point</button>
         </div>
-        <button class="btn-reset" onclick="archiveAndReset()">Finish & Save</button>
     </div>
 
-    <div class="history-section" id="history-list"></div>
+    <div class="history-section">
+        <h3 style="color: #444;">Activity (Last 24 Hours)</h3>
+        <div id="log-list"></div>
+        <button class="btn-clear" onclick="clearActivityLog()">Clear Log History</button>
+    </div>
 
     <script>
-        // Data from your Firebase screenshot
+        // Your Firebase Configuration from previous step
         const firebaseConfig = {
             apiKey: "AIzaSyBLIy6zHXgS2tz0rmeFA6b3dW8q8J1sqJ8",
             authDomain: "daily-points-67f58.firebaseapp.com",
@@ -59,94 +57,82 @@
             storageBucket: "daily-points-67f58.firebasestorage.app",
             messagingSenderId: "7145583134",
             appId: "1:7145583134:web:1bf7bba719819db36e740f",
-            measurementId: "G-FQ4NQVVJT9",
             databaseURL: "https://daily-points-67f58-default-rtdb.firebaseio.com/"
         };
 
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // Listen for Goal changes
-        db.ref('settings/goal').on('value', (snap) => {
-            const goal = snap.val() || 10;
-            document.getElementById('goal-input').value = goal;
-            window.currentGoal = goal;
-            render();
-        });
-
-        // Listen for Points changes
+        // 1. Sync the Main Score from Firebase
         db.ref('live/points').on('value', (snap) => {
-            window.currentPoints = snap.val() || 0;
-            render();
+            const points = snap.val() || 0;
+            window.currentPoints = points;
+            document.getElementById('score').innerText = points;
+            renderTallies(points);
         });
 
-        // Listen for History changes
-        db.ref('history').on('value', (snap) => {
-            renderHistory(snap.val() || {});
+        // 2. Sync the Activity Log from Firebase
+        db.ref('activity_log').on('value', (snap) => {
+            renderLog(snap.val() || {});
         });
 
-        function changePoints(val) {
-            let newPoints = Math.max(0, (window.currentPoints || 0) + val);
-            db.ref('live/points').set(newPoints);
-        }
-
-        function updateGoal(val) {
-            db.ref('settings/goal').set(parseInt(val) || 10);
-        }
-
-        function render() {
-            const p = window.currentPoints || 0;
-            const g = window.currentGoal || 10;
-            const isGoal = p >= g;
+        function logActivity(val) {
+            const newPoints = Math.max(0, (window.currentPoints || 0) + val);
+            const now = Date.now();
             
-            document.getElementById('score').innerText = p;
-            document.getElementById('score').className = isGoal ? 'score-display score-reached' : 'score-display';
+            // Sync live score to cloud
+            db.ref('live/points').set(newPoints);
+            
+            // Record interaction with timestamp
+            db.ref('activity_log').push({
+                timestamp: now,
+                change: val > 0 ? "+1 Point" : "-1 Point",
+                type: val > 0 ? "add" : "sub",
+                timeLabel: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            });
+        }
 
+        function renderTallies(p) {
             const container = document.getElementById('tally-container');
             container.innerHTML = '';
             let groups = Math.floor(p / 5);
             let rem = p % 5;
-
-            for (let i = 0; i < groups; i++) {
-                container.innerHTML += `<span class="tally-group ${isGoal ? 'tally-goal-reached' : ''}">卌</span>`;
-            }
-            if (rem > 0) {
-                container.innerHTML += `<span class="tally-group ${isGoal ? 'tally-goal-reached' : ''}">${'|'.repeat(rem)}</span>`;
-            }
+            for (let i = 0; i < groups; i++) container.innerHTML += '<span class="tally-group">卌</span>';
+            if (rem > 0) container.innerHTML += `<span class="tally-group">${'|'.repeat(rem)}</span>`;
         }
 
-        function archiveAndReset() {
-            if (window.currentPoints === 0) return;
-            const note = prompt("Note for this entry:", "");
-            if (note !== null) {
-                const now = new Date();
-                const timestamp = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                db.ref('history').push({ date: timestamp, val: window.currentPoints, goal: window.currentGoal, note: note });
-                db.ref('live/points').set(0);
-            }
-        }
+        function renderLog(data) {
+            const list = document.getElementById('log-list');
+            list.innerHTML = '';
+            const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+            
+            // Filter entries by the 24-hour window
+            const filtered = Object.values(data)
+                .filter(item => item.timestamp > twentyFourHoursAgo)
+                .reverse();
 
-        function renderHistory(data) {
-            const list = document.getElementById('history-list');
-            list.innerHTML = '<h3 style="margin-left: 5px;">Activity Log</h3>';
-            Object.keys(data).reverse().forEach(key => {
-                const item = data[key];
-                const hitGoal = item.val >= item.goal;
-                list.innerHTML += `
-                    <div class="history-item" style="border-left-color: ${hitGoal ? 'var(--goal)' : 'var(--primary)'}">
-                        <button class="btn-delete" onclick="deleteHistory('${key}')">×</button>
-                        <div style="flex: 1;">
-                            <div style="font-weight:bold;">${hitGoal ? '🌟 Goal Met' : 'Session'}</div>
-                            <div class="history-date">${item.date}</div>
-                            ${item.note ? `<div class="history-note">"${item.note}"</div>` : ''}
-                        </div>
-                        <div class="history-score" style="color:${hitGoal ? 'var(--goal)' : 'var(--primary)'}">${item.val}</div>
-                    </div>`;
+            if (filtered.length === 0) {
+                list.innerHTML = '<p style="color:#999; font-size:0.9rem; text-align:center;">No recent activity.</p>';
+                return;
+            }
+
+            filtered.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'log-item';
+                div.innerHTML = `
+                    <span class="log-time">${item.timeLabel}</span>
+                    <span class="log-action ${item.type === 'add' ? 'text-add' : 'text-sub'}">
+                        ${item.change}
+                    </span>
+                `;
+                list.appendChild(div);
             });
         }
 
-        function deleteHistory(id) {
-            if(confirm("Delete this entry?")) db.ref('history/' + id).remove();
+        function clearActivityLog() {
+            if(confirm("Clear the 24-hour activity log? (Main score will stay)")) {
+                db.ref('activity_log').remove();
+            }
         }
     </script>
 </body>
