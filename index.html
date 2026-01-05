@@ -3,37 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tally Live Sync</title>
+    <title>Abdullah's Tracker</title>
     <meta name="apple-mobile-web-app-capable" content="yes">
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
     <style>
-        :root { --primary: #2d89ef; --success: #4caf50; --danger: #f44336; --bg: #f8f9fa; }
+        :root { --primary: #2d89ef; --success: #4caf50; --danger: #f44336; --bg: #f8f9fa; --gold: #f39c12; }
         body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: var(--bg); margin: 0; padding: 20px; }
-        .card { background: white; padding: 1.5rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; text-align: center; }
-        .score-display { font-size: 4.5rem; font-weight: 800; color: var(--primary); margin: 10px 0; }
+        
+        h1 { color: #333; font-size: 1.5rem; margin-bottom: 20px; text-align: center; }
+        
+        .card { background: white; padding: 1.5rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; text-align: center; margin-bottom: 20px; }
+        
+        .goal-box { margin-bottom: 15px; font-size: 0.9rem; color: #666; }
+        .goal-box input { width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 5px; text-align: center; font-weight: bold; }
+
+        .score-display { font-size: 4.5rem; font-weight: 800; color: var(--primary); margin: 5px 0; transition: 0.3s; }
+        .goal-reached-text { color: var(--gold); }
+        
         #tally-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 80px; padding: 15px; border-radius: 12px; margin-bottom: 20px; background: #fafafa; border: 1px inset #eee; }
         .tally-group { font-size: 2.2rem; letter-spacing: 2px; color: #444; font-weight: bold; }
+        
         .controls { display: flex; gap: 12px; width: 100%; }
-        button { padding: 20px; border: none; border-radius: 12px; font-size: 1.2rem; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button { padding: 18px; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-add { background-color: var(--success); color: white; flex: 2; }
         .btn-sub { background-color: var(--danger); color: white; flex: 1; }
         
-        .history-section { margin-top: 30px; width: 100%; max-width: 400px; }
+        .history-section { width: 100%; max-width: 400px; }
         .log-item { background: #fff; padding: 12px; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.03); border-left: 4px solid #ccc; }
+        .log-goal { border-left: 4px solid var(--gold); background: #fffdf0; }
         .log-time { font-size: 0.8rem; color: #888; }
         .log-action { font-weight: bold; font-size: 0.9rem; }
         .text-add { color: var(--success); }
         .text-sub { color: var(--danger); }
+        .text-goal { color: var(--gold); }
         
-        .btn-clear { background: none; border: 1px solid #ccc; color: #888; font-size: 0.8rem; padding: 8px 15px; border-radius: 8px; margin-top: 10px; cursor: pointer; width: 100%; }
-        .btn-clear:hover { background: #eee; color: var(--danger); }
+        .settings-btn { background: none; color: var(--primary); font-size: 0.8rem; margin-bottom: 10px; cursor: pointer; border:none; opacity: 0.7; }
+        .btn-clear { background: #eee; border: none; color: #888; font-size: 0.8rem; padding: 10px; border-radius: 8px; margin-top: 10px; cursor: pointer; width: 100%; }
     </style>
 </head>
 <body>
 
+    <h1>Abdullah's daily points tracker</h1>
+    <button class="settings-btn" onclick="setupPasscode()">Set Security Passcode</button>
+
     <div class="card">
+        <div class="goal-box">
+            Goal: <input type="number" id="goal-input" min="1" max="1000" onchange="updateGoal(this.value)"> points
+        </div>
         <div class="score-display" id="score">0</div>
         <div id="tally-container"></div>
         <div class="controls">
@@ -43,13 +61,12 @@
     </div>
 
     <div class="history-section">
-        <h3 style="color: #444;">Activity (Last 24 Hours)</h3>
+        <h3 style="color: #444; margin-bottom:10px;">Activity (Last 24 Hours)</h3>
         <div id="log-list"></div>
-        <button class="btn-clear" onclick="clearActivityLog()">Clear Log History</button>
+        <button class="btn-clear" onclick="requestClearLog()">Clear Log History</button>
     </div>
 
     <script>
-        // Your Firebase Configuration from previous step
         const firebaseConfig = {
             apiKey: "AIzaSyBLIy6zHXgS2tz0rmeFA6b3dW8q8J1sqJ8",
             authDomain: "daily-points-67f58.firebaseapp.com",
@@ -63,40 +80,77 @@
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
 
-        // 1. Sync the Main Score from Firebase
+        let currentPoints = 0;
+        let currentGoal = 10;
+        let savedPasscode = null;
+
+        // Load Points
         db.ref('live/points').on('value', (snap) => {
-            const points = snap.val() || 0;
-            window.currentPoints = points;
-            document.getElementById('score').innerText = points;
-            renderTallies(points);
+            currentPoints = snap.val() || 0;
+            render();
         });
 
-        // 2. Sync the Activity Log from Firebase
+        // Load Goal
+        db.ref('settings/goal').on('value', (snap) => {
+            currentGoal = snap.val() || 10;
+            document.getElementById('goal-input').value = currentGoal;
+            render();
+        });
+
+        // Load Activity Log
         db.ref('activity_log').on('value', (snap) => {
             renderLog(snap.val() || {});
         });
 
+        // Load Passcode
+        db.ref('settings/passcode').on('value', (snap) => {
+            savedPasscode = snap.val();
+        });
+
+        function updateGoal(val) {
+            let num = parseInt(val);
+            if (num < 1) num = 1;
+            if (num > 1000) num = 1000;
+            db.ref('settings/goal').set(num);
+        }
+
         function logActivity(val) {
-            const newPoints = Math.max(0, (window.currentPoints || 0) + val);
+            const newPoints = Math.max(0, currentPoints + val);
             const now = Date.now();
+            const timeLabel = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             
-            // Sync live score to cloud
+            // Update score
             db.ref('live/points').set(newPoints);
             
-            // Record interaction with timestamp
+            // Record activity
             db.ref('activity_log').push({
                 timestamp: now,
                 change: val > 0 ? "+1 Point" : "-1 Point",
                 type: val > 0 ? "add" : "sub",
-                timeLabel: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                timeLabel: timeLabel
             });
+
+            // Check if goal reached
+            if (val > 0 && newPoints === currentGoal) {
+                db.ref('activity_log').push({
+                    timestamp: now + 1,
+                    change: "Goal Achieved! 🌟",
+                    type: "goal",
+                    timeLabel: timeLabel
+                });
+            }
         }
 
-        function renderTallies(p) {
+        function render() {
+            const isReached = currentPoints >= currentGoal;
+            const scoreEl = document.getElementById('score');
+            scoreEl.innerText = currentPoints;
+            scoreEl.className = isReached ? 'score-display goal-reached-text' : 'score-display';
+
             const container = document.getElementById('tally-container');
             container.innerHTML = '';
-            let groups = Math.floor(p / 5);
-            let rem = p % 5;
+            let groups = Math.floor(currentPoints / 5);
+            let rem = currentPoints % 5;
             for (let i = 0; i < groups; i++) container.innerHTML += '<span class="tally-group">卌</span>';
             if (rem > 0) container.innerHTML += `<span class="tally-group">${'|'.repeat(rem)}</span>`;
         }
@@ -104,12 +158,8 @@
         function renderLog(data) {
             const list = document.getElementById('log-list');
             list.innerHTML = '';
-            const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
-            
-            // Filter entries by the 24-hour window
-            const filtered = Object.values(data)
-                .filter(item => item.timestamp > twentyFourHoursAgo)
-                .reverse();
+            const cutoff = Date.now() - (24 * 60 * 60 * 1000);
+            const filtered = Object.values(data).filter(item => item.timestamp > cutoff).reverse();
 
             if (filtered.length === 0) {
                 list.innerHTML = '<p style="color:#999; font-size:0.9rem; text-align:center;">No recent activity.</p>';
@@ -118,20 +168,35 @@
 
             filtered.forEach(item => {
                 const div = document.createElement('div');
-                div.className = 'log-item';
+                div.className = `log-item ${item.type === 'goal' ? 'log-goal' : ''}`;
                 div.innerHTML = `
                     <span class="log-time">${item.timeLabel}</span>
-                    <span class="log-action ${item.type === 'add' ? 'text-add' : 'text-sub'}">
+                    <span class="log-action ${item.type === 'add' ? 'text-add' : (item.type === 'sub' ? 'text-sub' : 'text-goal')}">
                         ${item.change}
-                    </span>
-                `;
+                    </span>`;
                 list.appendChild(div);
             });
         }
 
-        function clearActivityLog() {
-            if(confirm("Clear the 24-hour activity log? (Main score will stay)")) {
+        function setupPasscode() {
+            const first = prompt("Enter a 4-digit passcode:");
+            if (!first || first.length !== 4 || isNaN(first)) return alert("Must be 4 digits.");
+            const second = prompt("Confirm passcode:");
+            if (first === second) {
+                db.ref('settings/passcode').set(first);
+                alert("Passcode set!");
+            } else alert("Mismatched. Try again.");
+        }
+
+        function requestClearLog() {
+            if (!savedPasscode) return alert("Set a passcode first.");
+            let input = prompt("Enter passcode to clear log:");
+            while (input !== null && input !== savedPasscode) {
+                input = prompt("Wrong! Try again (or Cancel):");
+            }
+            if (input === savedPasscode) {
                 db.ref('activity_log').remove();
+                alert("Log cleared.");
             }
         }
     </script>
