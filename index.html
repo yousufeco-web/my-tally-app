@@ -13,16 +13,23 @@
         body { font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; background-color: var(--bg); margin: 0; padding: 20px; }
         h1 { color: #333; font-size: 1.5rem; margin-bottom: 20px; text-align: center; }
         .card { background: white; padding: 1.5rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); width: 100%; max-width: 400px; text-align: center; margin-bottom: 20px; }
-        .goal-box { margin-bottom: 15px; font-size: 0.9rem; color: #666; }
-        .goal-box input { width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 5px; text-align: center; font-weight: bold; }
+        
+        .goal-settings { display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px; font-size: 0.9rem; color: #666; }
+        .input-row { display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .goal-settings input[type="number"] { width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 5px; text-align: center; font-weight: bold; }
+        .reward-input { width: 90%; padding: 8px; border: 1px solid #ddd; border-radius: 5px; font-size: 0.85rem; }
+
         .score-display { font-size: 4.5rem; font-weight: 800; color: var(--primary); margin: 5px 0; transition: 0.3s; }
         .goal-reached-text { color: var(--gold); }
+        
         #tally-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; min-height: 80px; padding: 15px; border-radius: 12px; margin-bottom: 20px; background: #fafafa; border: 1px inset #eee; }
         .tally-group { font-size: 2.2rem; letter-spacing: 2px; color: #444; font-weight: bold; }
+        
         .controls { display: flex; gap: 12px; width: 100%; }
         button { padding: 18px; border: none; border-radius: 12px; font-size: 1.1rem; cursor: pointer; font-weight: bold; transition: 0.2s; }
         .btn-add { background-color: var(--success); color: white; flex: 2; }
         .btn-sub { background-color: var(--danger); color: white; flex: 1; }
+        
         .history-section { width: 100%; max-width: 400px; }
         .log-item { background: #fff; padding: 12px; border-radius: 10px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.03); border-left: 4px solid #ccc; }
         .log-goal { border-left: 4px solid var(--gold); background: #fffdf0; }
@@ -31,6 +38,7 @@
         .text-add { color: var(--success); }
         .text-sub { color: var(--danger); }
         .text-goal { color: var(--gold); }
+        
         .settings-btn { background: none; color: var(--primary); font-size: 0.8rem; margin-bottom: 10px; cursor: pointer; border:none; opacity: 0.7; }
         .btn-clear { background: #eee; border: none; color: #888; font-size: 0.8rem; padding: 10px; border-radius: 8px; margin-top: 10px; cursor: pointer; width: 100%; }
     </style>
@@ -41,9 +49,15 @@
     <button class="settings-btn" onclick="securePasscodeSetup()">Set/Update Security Passcode</button>
 
     <div class="card">
-        <div class="goal-box">
-            Goal: <input type="number" id="goal-input" min="1" max="1000" onchange="updateGoal(this.value)"> points
+        <div class="goal-settings">
+            <div class="input-row">
+                Goal: <input type="number" id="goal-input" min="1" max="1000" onchange="updateGoal(this.value)"> points
+            </div>
+            <div>
+                Reward: <input type="text" id="reward-input" class="reward-input" placeholder="Enter reward for your goal..." onchange="updateReward(this.value)">
+            </div>
         </div>
+        
         <div class="score-display" id="score">0</div>
         <div id="tally-container"></div>
         <div class="controls">
@@ -74,6 +88,7 @@
 
         let currentPoints = 0;
         let currentGoal = 10;
+        let currentReward = "";
         let savedPasscode = null;
 
         db.ref('live/points').on('value', (snap) => {
@@ -85,6 +100,11 @@
             currentGoal = snap.val() || 10;
             document.getElementById('goal-input').value = currentGoal;
             render();
+        });
+
+        db.ref('settings/reward').on('value', (snap) => {
+            currentReward = snap.val() || "";
+            document.getElementById('reward-input').value = currentReward;
         });
 
         db.ref('activity_log').on('value', (snap) => {
@@ -100,6 +120,10 @@
             db.ref('settings/goal').set(Math.min(1000, Math.max(1, num)));
         }
 
+        function updateReward(val) {
+            db.ref('settings/reward').set(val);
+        }
+
         function logActivity(val) {
             const newPoints = Math.max(0, currentPoints + val);
             const now = Date.now();
@@ -112,9 +136,11 @@
                 timeLabel: timeLabel
             });
             if (val > 0 && newPoints === currentGoal) {
+                let msg = "Goal Achieved! 🌟";
+                if (currentReward) msg += " Reward: " + currentReward;
                 db.ref('activity_log').push({
                     timestamp: now + 1,
-                    change: "Goal Achieved! 🌟",
+                    change: msg,
                     type: "goal",
                     timeLabel: timeLabel
                 });
@@ -150,10 +176,7 @@
             });
         }
 
-        // --- ENHANCED SECURITY LOGIC ---
-
         function securePasscodeSetup() {
-            // Check if a passcode already exists
             if (savedPasscode) {
                 let oldPass = prompt("Enter the OLD passcode to change it:");
                 if (oldPass !== savedPasscode) {
@@ -161,17 +184,13 @@
                     return;
                 }
             }
-
             const first = prompt("Enter a NEW 4-digit passcode:");
             if (!first || first.length !== 4 || isNaN(first)) return alert("Passcode must be 4 digits.");
-            
             const second = prompt("Confirm NEW passcode:");
             if (first === second) {
                 db.ref('settings/passcode').set(first);
                 alert("Passcode updated successfully!");
-            } else {
-                alert("Passcodes do not match. Try again.");
-            }
+            } else alert("Passcodes do not match.");
         }
 
         function requestClearLog() {
