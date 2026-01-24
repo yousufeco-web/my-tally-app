@@ -25,7 +25,6 @@
         .tally-group { font-size: 2.2rem; letter-spacing: 2px; color: #444; font-weight: bold; }
         .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-bottom: 10px; }
         button { border: none; border-radius: 12px; font-size: 1rem; cursor: pointer; font-weight: bold; transition: 0.2s; padding: 15px 5px; }
-        button:active { transform: scale(0.95); }
         .btn-add { background-color: var(--success); color: white; }
         .btn-sub { background-color: var(--danger); color: white; }
         .btn-reset-points { background-color: #333; color: white; width: 100%; font-size: 0.9rem; padding: 12px; }
@@ -44,7 +43,7 @@
 <body>
 
     <h1>Abdullah's daily points tracker</h1>
-    <div class="update-text">Update 5 (Secure Reset)</div>
+    <div class="update-text">Update 5 (Fixed Security)</div>
     <button class="settings-btn" onclick="securePasscodeSetup()">Set/Update Security Passcode</button>
 
     <div class="card">
@@ -86,6 +85,7 @@
 
         let currentPoints = 0, currentGoal = 10, currentReward = "", savedPasscode = null;
 
+        // Sync Live Data
         db.ref('live/points').on('value', (snap) => {
             const data = snap.val();
             currentPoints = parseFloat(data ? data.value : 0) || 0;
@@ -105,13 +105,17 @@
             document.getElementById('reward-input').value = currentReward;
         });
 
+        // Fixed Activity Log Loading
         db.ref('activity_log').orderByChild('secret').equalTo(S_KEY).on('value', (snap) => {
             renderLog(snap.val() || {});
         });
 
+        // Fixed Passcode Loading
         db.ref('settings/passcode').on('value', (snap) => {
             const data = snap.val();
-            savedPasscode = data ? data.value : null;
+            if (data && data.secret === S_KEY) {
+                savedPasscode = data.value;
+            }
         });
 
         function logActivity(val) {
@@ -172,15 +176,17 @@
             const first = prompt("Enter NEW 4-digit passcode:");
             if (!first || first.length !== 4 || isNaN(first)) return alert("4 digits required.");
             const second = prompt("Confirm NEW passcode:");
-            if (first === second) db.ref('settings/passcode').set({ value: first, secret: S_KEY });
-            else alert("Mismatch!");
+            if (first === second) {
+                db.ref('settings/passcode').set({ value: first, secret: S_KEY });
+                alert("Passcode updated!");
+            } else alert("Mismatch!");
         }
 
         function requestResetPoints() {
             if (!savedPasscode) return alert("Please set a passcode first using the button at the top.");
             let input = prompt("Enter passcode to reset total points to 0:");
             if (input === savedPasscode) {
-                if(confirm("Are you sure you want to reset your total points to 0?")) {
+                if(confirm("Are you sure?")) {
                     db.ref('live/points').set({ value: 0, secret: S_KEY });
                     db.ref('activity_log').push({
                         timestamp: Date.now(),
@@ -196,8 +202,10 @@
         function requestClearLog() {
             if (!savedPasscode) return alert("Set passcode first.");
             let input = prompt("Enter passcode:");
-            if (input === savedPasscode) { db.ref('activity_log').remove(); alert("Cleared!"); }
-            else if (input !== null) alert("Wrong!");
+            if (input === savedPasscode) { 
+                db.ref('activity_log').remove(); 
+                alert("Cleared!"); 
+            } else if (input !== null) alert("Wrong!");
         }
     </script>
 </body>
